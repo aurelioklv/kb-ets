@@ -1,4 +1,5 @@
 import networkx as nx
+import matplotlib.pyplot as plt
 import random
 
 
@@ -7,9 +8,19 @@ import random
 
 #Domain sets :
     #1. Forest, USED FOR INITIAL TESTING
-    #   "entry" : "neutral"
+    #   "entry" : "road"
     #   "long"  : "road", "river", "ravine"
     #   "3x3"   : "clearing", "forest", "camp", "lake"
+
+#Colour Table :
+    #1. Forest
+    #   "long"  : "road", = "goldenrod"
+    #           "river", = "skyblue"
+    #           "ravine" = "silver"
+    #   "3x3"   : "clearing", = "greenyellow"
+    #           "forest", = "green"
+    #           "camp", = "orange"
+    #           "lake" = "royalblue"
 
 #Constraints :
 #NEXT TO ONE ANOTHER
@@ -106,6 +117,7 @@ class CSP:
 
         # get the every possible domain value of the first unassigned variable
         first: V = unassigned[0]
+        random.shuffle(self.domains[int(first)])
 
         #MOD : Change value selection from first on list to --> 1. Random OR 2. Least Constraining Value
         for value in self.domains[int(first)]:
@@ -167,24 +179,55 @@ class preferedValue(Constraint[str, str]):
         self.place1: str = place1
         self.place2: str = place2
     def satisfied(self, assignment: Dict[str, str], types: Dict[str, str]) -> str:
+        if str(self.place1) not in assignment:
+            return None
         # If either place is not in the assignment then it is not
         # yet possible for their colors to be conflicting
         self.type1: str = types[int(self.place1)]
         self.type2: str = types[int(self.place2)]
-        if (self.type1 != self.type2) or (self.place2 not in assignment):
+        #print(self.type1 + "||" + assignment[self.place1])
+        #print(self.type2 + "||")
+        if (self.type1 != self.type2):
             return None
         # check the color assigned to place1 is not the same as the
         # color assigned to place2
 
         else:
             if(random.random() < 0.7):
-                return self.place2
+                return assignment[self.place1]
             else:
                 return None
 
 # Unary constraint : Jarak node dari titik "entry"
 
-
+#Memberi warna setiap verteks yang sudah diberi value
+    #   "long"  : "road", = "goldenrod"
+    #           "river", = "skyblue"
+    #           "ravine" = "silver"
+    #   "3x3"   : "clearing", = "greenyellow"
+    #           "forest", = "green"
+    #           "camp", = "orange"
+    #           "lake" = "royalblue"
+def assign_colour(result: Dict[str, str]) -> List[str]:
+    colour_list: List[str] = []
+    for value in result.values():
+        if value == "road":
+            colour_list.append("goldenrod")
+        elif value == "river":
+            colour_list.append("skyblue")
+        elif value == "ravine":
+            colour_list.append("silver")
+        elif value == "clearing":
+            colour_list.append("greenyellow")
+        elif value == "forest":
+            colour_list.append("green")
+        elif value == "camp":
+            colour_list.append("orange")
+        elif value == "lake":
+            colour_list.append("royalblue")
+        else:
+            colour_list.append("magenta")
+    return colour_list
 
 #Memberi domain setiap variabel sesuai jenisnya.
 def assign_domain(type: V) -> List[str]:
@@ -193,7 +236,10 @@ def assign_domain(type: V) -> List[str]:
     elif type == "long":
         return ["road", "river", "ravine"]
     elif type == "3x3":
-        return ["clearing", "forest", "camp"]
+        return ["clearing", "forest", "camp", "lake"]
+
+
+#MAIN
 
 
 #Menyimpan cluster graph sebagai graph networkx
@@ -236,6 +282,8 @@ solution: Optional[Dict[str, str]] = csp.backtracking_search()
 if solution is None:
     print("No solution found!")
 else:
-
     print(solution)
+
+nx.draw_networkx(cluster_graph, node_color=assign_colour(solution))
+plt.show()
 #END
