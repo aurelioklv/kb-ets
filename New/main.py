@@ -5,6 +5,10 @@ import random
 
 #NOTE : Harus python 3.10+ karena pakai "match case"
 
+#Variables :
+    # "entry" : Single node
+    # "long" : 3 node long
+    # "3x3" : 9 node 3x3
 
 #Domain sets :
     #1. Forest, USED FOR INITIAL TESTING
@@ -172,6 +176,7 @@ class notAdjacentConstraint(Constraint[str, str]):
 # END
 
 # Preference constraint : Pilihan pertama yang sebaiknya dipakai jika memiliki tetangga dengan nilai tertentu
+#TODO: Add specific preferences untuk tipe berbeda (misal river sama danau lebih besar kemungkinannya)
 class preferedValue(Constraint[str, str]):
     def __init__(self, place1: str, place2: str) -> None:
         super().__init__([place1, place2])
@@ -208,25 +213,34 @@ class preferedValue(Constraint[str, str]):
     #           "forest", = "green"
     #           "camp", = "orange"
     #           "lake" = "royalblue"
-def assign_colour(result: Dict[str, str]) -> List[str]:
+def assign_colour(types: Dict[str, str], result: Dict[str, str]) -> List[str]:
     colour_list: List[str] = []
-    for value in result.values():
-        if value == "road":
-            colour_list.append("goldenrod")
-        elif value == "river":
-            colour_list.append("skyblue")
-        elif value == "ravine":
-            colour_list.append("silver")
-        elif value == "clearing":
-            colour_list.append("greenyellow")
-        elif value == "forest":
-            colour_list.append("green")
-        elif value == "camp":
-            colour_list.append("orange")
-        elif value == "lake":
-            colour_list.append("royalblue")
-        else:
-            colour_list.append("magenta")
+    node_amount = 0
+    for key, value in result.items():
+        key = int(key)
+        if(types[key] == "entry"):
+            node_amount = 1
+        elif(types[key] == "long"):
+            node_amount = 3
+        elif(types[key] == "3x3"):
+            node_amount = 9
+        for x in range(node_amount):
+            if value == "road":
+                colour_list.append("goldenrod")
+            elif value == "river":
+                colour_list.append("skyblue")
+            elif value == "ravine":
+                colour_list.append("silver")
+            elif value == "clearing":
+                colour_list.append("greenyellow")
+            elif value == "forest":
+                colour_list.append("green")
+            elif value == "camp":
+                colour_list.append("orange")
+            elif value == "lake":
+                colour_list.append("royalblue")
+            else:
+                colour_list.append("magenta")
     return colour_list
 
 #Memberi domain setiap variabel sesuai jenisnya.
@@ -238,7 +252,48 @@ def assign_domain(type: V) -> List[str]:
     elif type == "3x3":
         return ["clearing", "forest", "camp", "lake"]
 
+#Membangun graph utuh dari cluster_graph
+def build_output(input: List[str]) -> nx.Graph:
+    result = nx.Graph()
+    nodeCount = 0
+    for value in input:
+        if value == "entry":
+            result.add_node(nodeCount)
+            nodeCount += 1
+        elif value == "long":
+            for i in range(3):
+                result.add_node(nodeCount)
+                #For undirected edge
+                result.add_edge(nodeCount - 1, nodeCount)
+                result.add_edge(nodeCount, nodeCount - 1)
+                nodeCount += 1
+        elif value == "3x3":
+            for i in range(9):
+                result.add_node(nodeCount)
+                nodeCount += 1
+            #Builds edges
+            nodeCount -= 1 #Accounts for mistake in add_edge
+            for x in range(2):
+                i = x*3
+                result.add_edge(nodeCount - 1 - i, nodeCount - i)
+                result.add_edge(nodeCount - i, nodeCount - 1 - i)
+                result.add_edge(nodeCount - 2 - i, nodeCount - i)
+                result.add_edge(nodeCount - i, nodeCount - 2 - i)
+                result.add_edge(nodeCount - 3 - i, nodeCount - i)
+                result.add_edge(nodeCount - i, nodeCount - 3 - i)
+                result.add_edge(nodeCount - 4 - i, nodeCount - 1 - i)
+                result.add_edge(nodeCount - 1 - i, nodeCount - 4 - i)
+                result.add_edge(nodeCount - 2 - i, nodeCount - 5 - i)
+                result.add_edge(nodeCount - 5 - i, nodeCount - 2 - i)
+            result.add_edge(nodeCount - 6, nodeCount - 7)
+            result.add_edge(nodeCount - 7, nodeCount - 6)
+            result.add_edge(nodeCount - 6, nodeCount - 8)
+            result.add_edge(nodeCount - 8, nodeCount - 6)
+            result.add_edge(nodeCount - 6, nodeCount - 9)
+            result.add_edge(nodeCount - 9, nodeCount - 6)
+            nodeCount += 1
 
+    return result
 #MAIN
 
 
@@ -283,7 +338,8 @@ if solution is None:
     print("No solution found!")
 else:
     print(solution)
-
-nx.draw_networkx(cluster_graph, node_color=assign_colour(solution))
-plt.show()
+    result_graph: nx.Graph = build_output(types)
+if result_graph is not None:
+    nx.draw_networkx(result_graph, node_color=assign_colour(cluster_type, solution))
+    plt.show()
 #END
