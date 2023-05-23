@@ -1,39 +1,69 @@
-import networkx as nx
-from constraint import *
+from typing import Generic, TypeVar, Dict, List, Optional
+from abc import ABC, abstractmethod
 
-def read_graph(filename):
-    return nx.read_edgelist(filename)
+V = TypeVar('V')  # variable type
+D = TypeVar('D')  # domain type
 
-def solve_csp(G):
-    problem = Problem()
 
-    for node in G.nodes():
-        problem.addVariable(node, ['forest', 'dune', 'hill', 'river'])
+# Base class for all constraints
+class Constraint(Generic[V, D], ABC):
+    # The variables that the constraint is between
+    def __init__(self, variables: List[V]) -> None:
+        self.variables = variables
 
-    for node in G.nodes():
-        neighbors = list(G.neighbors(node))
-        problem.addConstraint(AllDifferentConstraint(), [node] + neighbors)
-        
-        if 'forest' in neighbors:
-            problem.addConstraint(lambda n, f: n == 'forest' and f == 'hill', [node, 'forest'])
+    # Must be overridden by subclasses
+    @abstractmethod
+    def satisfied(self, assignment: Dict[V, D]) -> bool:
+        ...
 
-        if 'dune' in neighbors:
-            problem.addConstraint(lambda n, d: n == 'dune' and d != 'river', [node, 'dune'])
+    # A constraint satisfaction problem consists of variables of type V
+    # that have ranges of values known as domains of type D and constraints
+    # that determine whether a particular variable's domain selection is valid
 
-    solutions = problem.getSolutionIter()
 
-    return solutions
+class CSP(Generic[V, D]):
+    def __init__(self, variables: List[V], domains: Dict[V, List[D]]) -> None:
+        self.variables: List[V] = variables  # variables to be constrained
+        self.domains: Dict[V, List[D]] = domains  # domain of each variable
+        self.constraints: Dict[V, List[Constraint[V, D]]] = {}
+        for variable in self.variables:
+            self.constraints[variable] = []
+            if variable not in self.domains:
+                raise LookupError("Every variable should have a domain assigned to it.")
 
-G = read_graph("map.txt")
-solutions = solve_csp(G)
+    def add_constraint(self, constraint: Constraint[V, D]) -> None:
+        for variable in constraint.variables:
+            if variable not in self.variables:
+                raise LookupError("Variable in constraint not in CSP")
+            else:
+                self.constraints[variable].append(constraint)
 
-count = 0
-for solution in solutions:
-    print(f"Solution {count+1}:")
-    for node, value in solution.items():
-        print(f"{node}: {value}")
-    count += 1
-    print()
+        # Check if the value assignment is consistent by checking all constraints
+        # for the given variable against it
 
-if count == 0:
-    print("No solutions found.")
+    def consistent(self, variable: V, assignment: Dict[V, D]) -> bool:
+        for constraint in self.constraints[variable]:
+            if not constraint.satisfied(assignment):
+                return False
+        return True
+
+    def backtracking_search(self, assignment: Dict[V, D] = {}) -> Optional[Dict[V, D]]:
+        # assignment is complete if every variable is assigned (our base case)
+        if len(assignment) == len(self.variables):
+            return assignment
+
+        # get all variables in the CSP but not in the assignment
+        unassigned: List[V] = [v for v in self.variables if v not in assignment]
+
+        # get the every possible domain value of the first unassigned variable
+        first: V = unassigned[0]
+        for value in self.domains[first]:
+            local_assignment = assignment.copy()
+            local_assignment[first] = value
+            # if we're still consistent, we recurse (continue)
+            if self.consistent(first, local_assignment):
+                result: Optional[Dict[V, D]] = self.backtracking_search(local_assignment)
+                # if we didn't find the result, we will end up backtracking
+                if result is not None:
+                    return result
+        return None
