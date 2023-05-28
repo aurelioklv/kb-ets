@@ -1,6 +1,6 @@
-import networkx as nx
-import matplotlib.pyplot as plt
-import random
+import networkx as nx # Digunakan untuk menyimpan graph
+import matplotlib.pyplot as plt # Digunakan untuk menampilkan graph
+import random # Digunakan untuk random number generator (random()).
 
 
 #NOTE : Harus python 3.10+ karena pakai "match case"
@@ -26,10 +26,6 @@ import random
     #           "camp", = "orange"
     #           "lake" = "royalblue"
 
-#Constraints :
-#NEXT TO ONE ANOTHER
-#CAN'T BE NEXT TO EACH OTHER
-
 #TODO : Integrate the code with networkx graph?
 
 
@@ -47,38 +43,39 @@ R = TypeVar('R', str, bool)
 #Return value dari constraint bisa bool (binary) atau str (preference)
 
 
-# Base class for all constraints
+
+# Kelas abstract untuk constraint yang digunakan.
 class Constraint(Generic[V, D], ABC):
-    # The variables that the constraint is between
+    # Menyimpan variabel-variabel yang dipengaruhi constraint.
+    # Constraint harus dibuat untuk setiap set variabel yang dipengaruhi constraint agar diuji satu per satu.
     def __init__(self, variables: List[V]) -> None:
         self.variables = variables
 
-    # Must be overridden by subclasses
     @abstractmethod
     def satisfied(self, assignment: Dict[V, D]) -> R:
         ...
 
-    # A constraint satisfaction problem consists of variables of type V
-    # that have ranges of values known as domains of type D and constraints
-    # that determine whether a particular variable's domain selection is valid
-
-
-
+# Class CSP, diubah agar sesuai dengan masalah yang dikerjakan :
+# Tambahan :
+    # types dan domains, untuk menyimpan informasi tipe cluster node dan domainnya.
+    # prefConstraint, untuk menyimpan preference constraint yang penggunaannya berbeda dengan constraint yang benar atau salah.
 class CSP:
     def __init__(self, variables: List[V], types: Dict[V, V], domains: Dict[V, List[D]]) -> None:
-        self.variables: List[V] = variables  # variables to be constrained
-        self.types: Dict[V, V] = types #Tipe dari node
-        self.domains: Dict[V, List[D]] = domains  # domain of each variable
-        self.constraints: Dict[V, List[Constraint]] = {}
-        self.prefConstraint: Dict[V, List[Constraint]] = {}
+        self.variables: List[V] = variables  # Variable dalam CSP (Cluster nodes)
+        self.types: Dict[V, V] = types # Tipe setiap cluster node
+        self.domains: Dict[V, List[D]] = domains  # Domain setiap variable
+        self.constraints: Dict[V, List[Constraint]] = {} # Berisi setiap constraint yang mempengaruhi variabel 'V'
+        self.prefConstraint: Dict[V, List[Constraint]] = {} # Berisi preference constraint yang mempengaruhi variabel 'V'
 
-
+        # Inisialisasi list kosong untuk menyimpan constraints + memastikan setiap variable ada domain.
         for variable in self.variables:
             self.constraints[variable] = []
             self.prefConstraint[variable] = []
             if not self.domains[int(variable)]:
                 raise LookupError("Every variable should have a domain assigned to it.")
 
+    # Kedua fungsi add digunakan untuk menambah constraint ke dalam objek CSP
+    # Digunakan untuk mempermudah pengaksesan constraint di backtracking algorithm
     def add_constraint(self, constraint: Constraint) -> None:
         for variable in constraint.variables:
             if variable not in self.variables:
@@ -86,6 +83,7 @@ class CSP:
             else:
                 self.constraints[variable].append(constraint)
 
+    # Fungsi tambahan untuk preference constraint
     def add_preference(self, constraint: Constraint) -> None:
         for variable in constraint.variables:
             if variable not in self.variables:
@@ -93,16 +91,15 @@ class CSP:
             else:
                 self.prefConstraint[variable].append(constraint)
 
-    #Fungsi untuk preference constraint (ori)
+    #Fungsi tambahan untuk preference constraint
+    # Digunakan untuk memberi nilai assignment node 'V' yang sesuai dengan preference constraint.
     def preference(self, variable: V, assignment: Dict[V, D]) -> D:
         for constraint in self.prefConstraint[variable]:
             return constraint.satisfied(assignment, self.types)
 
 
 
-    # Check if the value assignment is consistent by checking all constraints
-    # for the given variable against it
-
+    # Fungsi untuk menguji assignment nilai node 'V' terhadap semua constraint node tersebut agar memenuhi semuanya atau tidak.
 
     def consistent(self, variable: V, assignment: Dict[V, D]) -> bool:
         for constraint in self.constraints[variable]:
@@ -110,40 +107,39 @@ class CSP:
                 return False
         return True
 
-
+    # Fungsi recursive untuk backtracking search
+    # Args:
+        # assignment : Dictionary berisi hasil assignment untuk setiap node, setiap rekursi akan semakin terisi.
     def backtracking_search(self, assignment: Dict[V, D] = {}) -> Optional[Dict[V, D]]:
-        # assignment is complete if every variable is assigned (our base case)
+        # Jika semua variable sudah diberi nilai, proses assignment selesai.
         if len(assignment) == len(self.variables):
             return assignment
 
-        # get all variables in the CSP but not in the assignment
+        # Mengambil list berisi variable yang belum diberi nilai
         unassigned: List[V] = [v for v in self.variables if v not in assignment]
 
-        # get the every possible domain value of the first unassigned variable
+        # Mendapatkan setiap nilai pada domain yang bisa diberi ke variable pertama di list unassigned.
         first: V = unassigned[0]
         random.shuffle(self.domains[int(first)])
 
-        #MOD : Change value selection from first on list to --> 1. Random OR 2. Least Constraining Value
+        # Memeriksa untuk setiap value yang bisa diassign apakah memenuhi constraint2 atau tidak.
         for value in self.domains[int(first)]:
             local_assignment = assignment.copy()
             prefered_value = self.preference(first, local_assignment)
+            # Mencoba mencari nilai yang sesuai preference constraint sebaiknya dipilih dulu
             if prefered_value is not None:
-                local_assignment[first] = prefered_value
+                local_assignment[first] = prefered_value # Jika ditemukan, coba nilai ini dulu sebelum value
             else:
                 local_assignment[first] = value
-            # if we're still consistent, we recurse (continue)
+            # Jika masih ditemukan nilai yang bisa diassign, lanjutkan rekursi.
             if self.consistent(first, local_assignment):
                 result: Optional[Dict[V, D]] = self.backtracking_search(local_assignment)
-                # if we didn't find the result, we will end up backtracking
+                # Backtracking jika tidak ditemukan nilai yang bisa diassign
                 if result is not None:
                     return result
         return None
 
-# Constraints sesuai abstract class
-# NOTE :
-# Saat ini : Contraint deklarasi antar 2 variabel
-# TODO : Constraint deklarasi untuk 1 node, otomatis memeriksa untuk semua neighbour node menggunakan networkx
-
+# Constraint yang memastikan bahwa terdapat 2 nilai (region) yang tidak bisa saling terhubung
 class notAdjacentConstraint(Constraint[str, str]):
     def __init__(self, place1: str, place2: str) -> None:
         super().__init__([place1, place2])
@@ -152,12 +148,11 @@ class notAdjacentConstraint(Constraint[str, str]):
         self.place2: str = place2
 
     def satisfied(self, assignment: Dict[str, str]) -> bool:
-        # If either place is not in the assignment then it is not
-        # yet possible for their colors to be conflicting
+        # Jika setidaknya 1 node yang ingin dibandingkan belum ada nilai, tidak mungkin constraint gagal.
         if self.place1 not in assignment or self.place2 not in assignment:
             return True
-        # check the color assigned to place1 is not the same as the
-        # color assigned to place2
+
+        # Melakukan perbandingan berdasarkan tipe cluster
         match assignment[self.place1]:
             #For "long" type
             case "road":
@@ -176,7 +171,6 @@ class notAdjacentConstraint(Constraint[str, str]):
 # END
 
 # Preference constraint : Pilihan pertama yang sebaiknya dipakai jika memiliki tetangga dengan nilai tertentu
-#TODO: Add specific preferences untuk tipe berbeda (misal river sama danau lebih besar kemungkinannya)
 class preferedValue(Constraint[str, str]):
     def __init__(self, place1: str, place2: str) -> None:
         super().__init__([place1, place2])
@@ -186,26 +180,21 @@ class preferedValue(Constraint[str, str]):
     def satisfied(self, assignment: Dict[str, str], types: Dict[str, str]) -> str:
         if str(self.place1) not in assignment:
             return None
-        # If either place is not in the assignment then it is not
-        # yet possible for their colors to be conflicting
+
         self.type1: str = types[int(self.place1)]
         self.type2: str = types[int(self.place2)]
-        #print(self.type1 + "||" + assignment[self.place1])
-        #print(self.type2 + "||")
+        # Jika tipe kedua cluster node tidak sama, otomatis domainnya berbeda.
         if (self.type1 != self.type2):
             return None
-        # check the color assigned to place1 is not the same as the
-        # color assigned to place2
-
+        # Jika sama dan node pertama sudah terisi, maka tambah kemungkinan node kosong diisi dengan nilai node pertama.
         else:
             if(random.random() < 0.7):
                 return assignment[self.place1]
             else:
                 return None
 
-# Unary constraint : Jarak node dari titik "entry"
-
-#Memberi warna setiap verteks yang sudah diberi value
+# assign_colour :
+#Memberi warna setiap verteks yang sudah diberi value (warna menggunakan daftar warna matplotlib).
     #   "long"  : "road", = "goldenrod"
     #           "river", = "skyblue"
     #           "ravine" = "silver"
@@ -213,9 +202,15 @@ class preferedValue(Constraint[str, str]):
     #           "forest", = "green"
     #           "camp", = "orange"
     #           "lake" = "royalblue"
+# Input :
+    #  1. Dictionary berisi tipe setiap node cluster.
+    #  2. Dictionary berisi hasil assignment per cluster.
+# Output :
+    #  List berisi warna setiap node, urut dengan urutan node di dictionary dan sejumlah dengan jumlah node setiap cluster.
 def assign_colour(types: Dict[str, str], result: Dict[str, str]) -> List[str]:
     colour_list: List[str] = []
     node_amount = 0
+    # Menentukan jumlah node yang diberi warna berdasarkan cluster.
     for key, value in result.items():
         key = int(key)
         if(types[key] == "entry"):
@@ -224,6 +219,7 @@ def assign_colour(types: Dict[str, str], result: Dict[str, str]) -> List[str]:
             node_amount = 3
         elif(types[key] == "3x3"):
             node_amount = 9
+        # Memberi warna sejumlah node di dalam cluster.
         for x in range(node_amount):
             if value == "road":
                 colour_list.append("goldenrod")
@@ -243,7 +239,7 @@ def assign_colour(types: Dict[str, str], result: Dict[str, str]) -> List[str]:
                 colour_list.append("magenta")
     return colour_list
 
-#Memberi domain setiap variabel sesuai jenisnya.
+#Memberi domain setiap variabel sesuai jenis clusternya.
 def assign_domain(type: V) -> List[str]:
     if type == "entry":
         return ["road"]
@@ -253,6 +249,10 @@ def assign_domain(type: V) -> List[str]:
         return ["clearing", "forest", "camp", "lake"]
 
 #Membangun graph utuh dari cluster_graph
+#Input :
+    # Daftar node cluster
+#Output :
+    # nx.graph berisi terjemahan cluster menjadi node-node sesungguhnya.
 def build_output(input: List[str]) -> nx.Graph:
     result = nx.Graph()
     nodeCount = 0
@@ -260,6 +260,7 @@ def build_output(input: List[str]) -> nx.Graph:
         if value == "entry":
             result.add_node(nodeCount)
             nodeCount += 1
+        # long berupa 3 node (O-O-O)
         elif value == "long":
             for i in range(3):
                 result.add_node(nodeCount)
@@ -267,6 +268,7 @@ def build_output(input: List[str]) -> nx.Graph:
                 result.add_edge(nodeCount - 1, nodeCount)
                 result.add_edge(nodeCount, nodeCount - 1)
                 nodeCount += 1
+        # 3x3 berupa 9 nodes tersusun seperti grid
         elif value == "3x3":
             for i in range(9):
                 result.add_node(nodeCount)
@@ -308,7 +310,7 @@ cluster_type: Dict[str, str] = {}
 #Domains
 cluster_domain: Dict[str, List[str]] = {}
 
-#Reading types from "types.txt"
+#Membaca tipe cluster dari "types.txt"
 types: List = []
 
 with open('types.txt') as f:
@@ -317,17 +319,17 @@ with open('types.txt') as f:
 
 
 
-#Creating csp object
+#Membuat objek "csp"
 for cluster_node in cluster_list:
     node = int(cluster_node)
-    # Assign types from preassigned list
+    # Memberi tipe cluster berdasarkan list
     cluster_type[node] = types[node]
-    # Assign domain List based on type
+    # Memberi domain berdasarkan tipe cluster.
     cluster_domain[node] = assign_domain(cluster_type[node])
 print("kek")
 csp: CSP = CSP(cluster_list, cluster_type, cluster_domain)
 
-#Creating constraints for each node
+#Menghasilkan constraint untuk setiap node. Tepatnya setiap node memiliki constraint terhadap tetangganya.
 for cluster_node in cluster_list:
     for neighbour in cluster_graph.neighbors(cluster_node):
         csp.add_constraint(notAdjacentConstraint(cluster_node, neighbour))
@@ -338,8 +340,23 @@ if solution is None:
     print("No solution found!")
 else:
     print(solution)
+    # Membangun graph sesungguhnya dari hasil
     result_graph: nx.Graph = build_output(types)
 if result_graph is not None:
+    # Menggambar graph hasil dengan warna sesuai assignment CSP
     nx.draw_networkx(result_graph, node_color=assign_colour(cluster_type, solution))
-    plt.show()
+
+    # Mengatur margin pada sumbu gambar menjadi nol
+    plt.margins(0)
+
+    # Menghilangkan garis tepi (spine) pada sumbu
+    ax = plt.gca()
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # Mengatur parameter bbox_inches menjadi 'tight' saat menyimpan gambar
+    plt.savefig('D:\kb_ets\solution.png', bbox_inches='tight')
+    # plt.show()
 #END
